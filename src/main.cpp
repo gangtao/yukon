@@ -5,35 +5,25 @@
 
 #include "rxcpp/rx.hpp"
 
-int main(int, char **)
-{
+void sample() {
     std::string helloJim = generateHelloString("Yukon");
     std::cout << helloJim << std::endl;
 
-    auto values1 = rxcpp::observable<>::range(1, 5);
-    values1.subscribe(
-        [](int v)
-        { printf("Value 1 OnNext: %d\n", v); },
-        []()
-        { printf("Value 1 OnCompleted\n"); });
+    // create a obseverable of Row
+    {
+        printf("//! [Create sample flow]\n");
+        auto flow = makeDataTableFlow(-1,300);
 
-    std::array<int, 3> a = {{1, 2, 3}};
-    auto values2 = rxcpp::observable<>::iterate(a);
-    values2.subscribe(
-        [](int v)
-        { printf("Value 2 OnNext: %d\n", v); },
-        []()
-        { printf("Value 2 OnCompleted\n"); });
+        flow.
+            subscribe(
+                [](Row v){ showRow(v); },
+                [](){printf("OnCompleted\n");});
+        printf("//! [Create sample flow]\n");
+    }
+}
 
-    // sample of array of variant dictionary
-    Rows rows {{{{"a",1}},{{"a",3.2f}},{{"a","8.8f"}}}};  
-    auto values3 = rxcpp::observable<>::iterate(rows);
-    values3.subscribe(
-        [](Row r)
-        { showValue(r["a"]); },
-        []()
-        { printf("Value 3 OnCompleted\n"); });
-    
-
+int main(int, char **)
+{
+    sample();
     return 0;
 }

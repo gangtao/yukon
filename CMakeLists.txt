@@ -9,11 +9,14 @@ project(
 
 set( CMAKE_CXX_STANDARD 17)
 
-include_directories(src/)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/)
 include_directories(/usr/local/include)
-add_library(hello src/hello.cpp)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/vendor/)
+
+add_library(hello ${CMAKE_CURRENT_SOURCE_DIR}/src/hello.cpp)
 
 find_package(rxcpp CONFIG)
 
-add_executable(main src/main.cpp)
+add_executable(main ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(main hello)
+target_link_libraries(main ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cxxfaker/cxxfaker.a)
