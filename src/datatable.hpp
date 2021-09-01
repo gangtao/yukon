@@ -45,6 +45,7 @@ void showRow(const std::map<Key, Value> & row) {
     std::cout << "timestamp : " << std::get<long>(row.at("timestamp"))
         << " usage : " << std::get<int>(row.at("usage"))
         << " host : " << std::get<std::string>(row.at("host")) 
+        << " tag : " << std::get<std::string>(row.at("tag")) 
         << std::endl;
 }
 
@@ -60,10 +61,13 @@ auto makeDataTableFlow(int size, int interval = 1000)
             while ( size == -1 || currentSize < size ) {
                 auto t = std::chrono::system_clock::now();
                 long ts = std::chrono::duration_cast<std::chrono::milliseconds>(t.time_since_epoch()).count();
+                auto tags = std::vector<std::string>({"A","B","C"});
+                auto it = generator.randomElement(tags);
                 Row row{
                     {"timestamp", ts},
                     {"usage", generator.randomInt(0,100)},
-                    {"host", generator.IPv4()}
+                    {"host", generator.IPv4()},
+                    {"tag", *it++}
                 };
                 s.on_next(row);
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval));
