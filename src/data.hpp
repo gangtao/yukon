@@ -15,11 +15,18 @@ typedef std::variant<int, float, long, std::string> Value;
 typedef std::map<Key, Value> Row;
 typedef std::vector<Row> Rows;
 
-void showValue(const Value &value)
+long getCurrentTimestamp()
+{
+    auto t = std::chrono::system_clock::now();
+    long ts = std::chrono::duration_cast<std::chrono::milliseconds>(t.time_since_epoch()).count();
+    return ts;
+}
+
+const std::string getValueString(const Value &value)
 {
     try
     {
-        std::cout << std::get<int>(value) << std::endl;
+        return std::to_string(std::get<int>(value));
     }
     catch (const std::bad_variant_access &ex)
     {
@@ -27,7 +34,7 @@ void showValue(const Value &value)
 
     try
     {
-        std::cout << std::get<long>(value) << std::endl;
+        return std::to_string(std::get<long>(value));
     }
     catch (const std::bad_variant_access &ex)
     {
@@ -35,7 +42,7 @@ void showValue(const Value &value)
 
     try
     {
-        std::cout << std::get<float>(value) << std::endl;
+        return std::to_string(std::get<float>(value));
     }
     catch (const std::bad_variant_access &ex)
     {
@@ -43,20 +50,23 @@ void showValue(const Value &value)
 
     try
     {
-        std::cout << std::get<std::string>(value) << std::endl;
+        return std::get<std::string>(value);
     }
     catch (const std::bad_variant_access &ex)
     {
     }
+
+    return std::string("na");
 }
 
 void printRow(const std::map<Key, Value> &row)
 {
-    std::cout << "timestamp : " << std::get<long>(row.at("timestamp"))
-              << " usage : " << std::get<int>(row.at("usage"))
-              << " host : " << std::get<std::string>(row.at("host"))
-              << " tag : " << std::get<std::string>(row.at("tag"))
-              << std::endl;
+    std::cout << "| ";
+    for (auto const &[key, val] : row)
+    {
+        std::cout << key << " : " << getValueString(val) << " | ";
+    }
+    std::cout << std::endl;
 }
 
 auto makeDataTableFlow(int size, int interval = 1000)
@@ -70,8 +80,7 @@ auto makeDataTableFlow(int size, int interval = 1000)
             int currentSize = 0;
             while (size == -1 || currentSize < size)
             {
-                auto t = std::chrono::system_clock::now();
-                long ts = std::chrono::duration_cast<std::chrono::milliseconds>(t.time_since_epoch()).count();
+                long ts = getCurrentTimestamp();
                 auto tags = std::vector<std::string>({"A", "B", "C"});
                 auto it = generator.randomElement(tags);
                 Row row{
@@ -79,6 +88,29 @@ auto makeDataTableFlow(int size, int interval = 1000)
                     {"usage", generator.randomInt(0, 100)},
                     {"host", generator.IPv4()},
                     {"tag", *it++}};
+                s.on_next(row);
+                std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+                currentSize++;
+            }
+            s.on_completed();
+        });
+
+    return flow;
+}
+
+auto makeWaterMarkFlow(int size, int interval = 1000)
+{
+    auto flow = rxcpp::observable<>::create<Row>(
+        [=](rxcpp::subscriber<Row> s)
+        {
+            int currentSize = 0;
+            while (size == -1 || currentSize < size)
+            {
+                long ts = getCurrentTimestamp();
+                Row row{
+                    {"timestamp", ts},
+                    {"watermark", 0},
+                };
                 s.on_next(row);
                 std::this_thread::sleep_for(std::chrono::milliseconds(interval));
                 currentSize++;
@@ -104,7 +136,7 @@ public:
     {
     }
 
-    void addRow(Row && row)
+    void addRow(Row &&row)
     {
         // sort data here
         data.push_back(std::move(row));
@@ -147,12 +179,22 @@ public:
         std::cout << "window start - " << start << " end - " << end << std::endl;
         DataTable::print();
     }
+
+    long getStart() const
+    {
+        return start;
+    }
+
+    long getEnd() const
+    {
+        return end;
+    }
 };
 
 // multiple window data
 class DataWindows
 {
-private:
+protected:
     std::map<long, DataWindow> windows;
     long length;
     long firstTimeStamp;
@@ -163,7 +205,12 @@ public:
     {
     }
 
-    void addRow(Row &&row)
+    DataWindows(const long length, const long firstTimeStamp, const std::map<long, DataWindow> &windows)
+        : length(length), firstTimeStamp(firstTimeStamp), windows(windows)
+    {
+    }
+
+    const DataWindows &addRow(Row &&row)
     {
         long timestamp = std::get<long>(row.at("timestamp"));
 
@@ -189,11 +236,68 @@ public:
             DataWindow newWindw(std::move(row), startTimestamp, startTimestamp + length);
             windows.insert({startTimestamp, newWindw});
         }
+
+        return *this;
     }
 
-    void print() const
+    virtual void print() const
     {
         for (auto const &[key, val] : windows)
+        {
+            std::cout << "key : " << key << std::endl;
+            val.print();
+        }
+    }
+};
+
+// every time a row is added, check if it should be triggerred,
+// after the event is tiggerred, remove it from data window
+class DataWindowsWithFixWatermark : public DataWindows
+{
+private:
+    long watermark;
+    std::map<long, DataWindow> windows_to_trigger;
+
+public:
+    DataWindowsWithFixWatermark(const long length, const long watermark)
+        : DataWindows(length), watermark(watermark)
+    {
+    }
+
+    const DataWindowsWithFixWatermark &addRow(Row &&row)
+    {
+        DataWindows::addRow(std::move(row));
+        long ts = getCurrentTimestamp();
+        windows_to_trigger.clear();
+
+        for (auto const &[key, val] : windows)
+        {
+            auto end = val.getEnd();
+            if (ts - end > watermark)
+            {
+                std::cout << "trigger window with end time : " << end << std::endl;
+                windows_to_trigger.insert({key, val});
+            }
+        }
+
+        // remove triggered window
+        for (auto const &[key, val] : windows_to_trigger)
+        {
+            windows.erase(key);
+            std::cout << "remove window with start time : " << key << std::endl;
+        }
+
+        return *this;
+    }
+
+    bool has_trigger() const
+    {
+        return windows_to_trigger.size() > 0;
+    }
+
+    virtual void print() const
+    {
+        for (auto const &[key, val] : windows_to_trigger)
         {
             std::cout << "key : " << key << std::endl;
             val.print();
