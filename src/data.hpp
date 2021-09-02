@@ -15,7 +15,6 @@ typedef std::variant<int, float, long, std::string> Value;
 typedef std::map<Key, Value> Row;
 typedef std::vector<Row> Rows;
 
-
 long getCurrentTimestamp()
 {
     auto t = std::chrono::system_clock::now();
@@ -75,37 +74,39 @@ auto makeDataTableFlow(int size = 10, int interval = 300)
     auto period = std::chrono::milliseconds(interval);
     auto values = rxcpp::observable<>::interval(period);
 
-    auto flow = values.take(size).map([=](int v){
-        // TODO : need a glable generator here
-        auto generator = cxxfaker::providers::Internet();
-        generator.Seed(rand());
-        long ts = getCurrentTimestamp();
-        auto tags = std::vector<std::string>({"A", "B", "C"});
-        auto it = generator.randomElement(tags);
-        Row row{
-            {"timestamp", ts},
-            {"usage", generator.randomInt(0, 100)},
-            {"host", generator.IPv4()},
-            {"tag", *it++}};
-        return row;
-    });
+    auto flow = values.take(size).map([=](int v)
+                                      {
+                                          // TODO : need a glable generator here
+                                          auto generator = cxxfaker::providers::Internet();
+                                          generator.Seed(rand());
+                                          long ts = getCurrentTimestamp();
+                                          auto tags = std::vector<std::string>({"A", "B", "C"});
+                                          auto it = generator.randomElement(tags);
+                                          Row row{
+                                              {"timestamp", ts},
+                                              {"usage", generator.randomInt(0, 100)},
+                                              {"host", generator.IPv4()},
+                                              {"tag", *it++}};
+                                          return row;
+                                      });
 
     return flow;
 }
 
-auto makeWaterMarkFlow(int size = 10, int interval = 300)
+auto makeWaterMarkFlow(int size = 10, int interval = 300, long wartermark = 100)
 {
     auto period = std::chrono::milliseconds(interval);
     auto values = rxcpp::observable<>::interval(period);
 
-    auto flow = values.take(size).map([](int v){
-        long ts = getCurrentTimestamp();
-        Row row{
-            {"timestamp", ts},
-            {"watermark", 0},
-        };
-        return row;
-    });
+    auto flow = values.take(size).map([=](int v)
+                                      {
+                                          long ts = getCurrentTimestamp();
+                                          Row row{
+                                              {"timestamp", ts},
+                                              {"watermark", wartermark},
+                                          };
+                                          return row;
+                                      });
 
     return flow;
 }
@@ -274,6 +275,69 @@ public:
         {
             windows.erase(key);
             std::cout << "remove window with start time : " << key << std::endl;
+        }
+
+        return *this;
+    }
+
+    bool has_trigger() const
+    {
+        return windows_to_trigger.size() > 0;
+    }
+
+    virtual void print() const
+    {
+        for (auto const &[key, val] : windows_to_trigger)
+        {
+            std::cout << "key : " << key << std::endl;
+            val.print();
+        }
+    }
+};
+
+// the data flow contain both real data and dyamically generated watermarks
+// the result will be triggerred based on watermarks
+class DataWindowsWithDynamicWatermark : public DataWindows
+{
+private:
+    std::map<long, DataWindow> windows_to_trigger;
+
+public:
+    DataWindowsWithDynamicWatermark(const long length)
+        : DataWindows(length)
+    {
+    }
+
+    const DataWindowsWithDynamicWatermark &addRow(Row &&row)
+    {
+        windows_to_trigger.clear();
+
+        if (row.find("watermark") == row.end())
+        {
+            // data row
+            DataWindows::addRow(std::move(row));
+        }
+        else
+        {
+            // watermark
+            long ts = getCurrentTimestamp();
+            long watermark = std::get<long>(row.at("watermark"));
+            for (auto const &[key, val] : windows)
+            {
+                auto end = val.getEnd();
+                if (ts - end > watermark)
+                {
+                    std::cout << "trigger window with end time : " << end << std::endl;
+                    windows_to_trigger.insert({key, val});
+                }
+            }
+
+            // remove triggered window
+            for (auto const &[key, val] : windows_to_trigger)
+            {
+                windows.erase(key);
+                std::cout << "remove window with start time : " << key << std::endl;
+            }
         }
 
         return *this;

@@ -176,6 +176,37 @@ void demo_eventtime_window_sliding_with_fix_watermark()
     printf("//! [window with event time and fix watermark ]\n\n");
 }
 
+void demo_eventtime_window_sliding_with_dynamic_watermark()
+{
+    printf("//! [window with event time and fix watermark]\n");
+    DataWindowsWithDynamicWatermark local_window_state(1000);
+
+    auto dataflow = makeDataTableFlow(10, 300);
+    auto watermarkflow = makeWaterMarkFlow(20, 300, 100);
+
+    auto flow = dataflow.merge(watermarkflow).map([&](Row row)
+                                               {
+                                                   auto state = local_window_state.addRow(std::move(row));
+                                                   return state;
+                                               })
+                    .filter([](DataWindowsWithDynamicWatermark windows)
+                            { return windows.has_trigger(); });
+
+    flow.subscribe(
+        [](DataWindowsWithDynamicWatermark windows)
+        {
+            std::cout << " ############################################################# " << std::endl;
+            std::cout << " event trigger: " << std::endl;
+            windows.print();
+            std::cout << " event trigger completed!" << std::endl;
+            std::cout << " ############################################################# " << std::endl;
+        },
+        []()
+        { std::cout << "window with event time completed!" << std::endl
+                    << std::endl; });
+    printf("//! [window with event time and fix watermark ]\n\n");
+}
+
 void wait()
 {
     do
@@ -206,11 +237,12 @@ int main(int, char **)
     //functionMap["1_demo_filter"] = demo_filter;
     //functionMap["2_demo_groupby"] = demo_groupby;
     //functionMap["3_demo_max"] = demo_max;
-    //functionMap["4_demo_merge"] = demo_merge;
-    //functionMap["5_demo_window_sliding"] = demo_window_sliding;
-    //functionMap["6_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
-    functionMap["7_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
-
+    //functionMap["4_demo_window_sliding"] = demo_window_sliding;
+    //functionMap["5_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
+    //functionMap["6_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
+    functionMap["7_demo_merge"] = demo_merge;
+    functionMap["8_demo_eventtime_window_sliding_with_dynamic_watermark"] = demo_eventtime_window_sliding_with_dynamic_watermark;
+    
     demo(functionMap);
 
     return 0;
