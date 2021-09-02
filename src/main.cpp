@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "hello.hpp"
-#include "datatable.hpp"
+#include "data.hpp"
 
 #include "rxcpp/rx.hpp"
 
@@ -15,7 +15,7 @@ void demo_create()
 
     flow.subscribe(
         [](Row v)
-        { showRow(v); },
+        { printRow(v); },
         []()
         { std::cout << "Create flow completed!" << std::endl; });
     printf("//! [create flow]\n\n");
@@ -29,7 +29,7 @@ void demo_filter()
 
     flow.subscribe(
         [](Row v)
-        { showRow(v); },
+        { printRow(v); },
         []()
         { std::cout << "filter flow completed!" << std::endl; });
     printf("//! [filter flow ]\n\n");
@@ -96,7 +96,7 @@ void demo_concat()
 
     flow.subscribe(
         [](Row v)
-        { showRow(v); },
+        { printRow(v); },
         []()
         { std::cout << "concat flow completed!" << std::endl; });
     printf("//! [concat ]\n\n");
@@ -115,7 +115,7 @@ void demo_window_sliding()
             printf("[window %d] Create window\n", id);
             w.subscribe(
                 [](Row v)
-                { showRow(v); },
+                { printRow(v); },
                 [id]()
                 { std::cout << "window " << id << " flow completed!" << std::endl; });
         },
@@ -124,11 +124,35 @@ void demo_window_sliding()
     printf("//! [window with processing time ]\n\n");
 }
 
+void demo_eventtime_window_sliding()
+{
+    printf("//! [window with event time]\n");
+    DataWindows local_window_state(1500);
+    Rows local_rows;
+    auto flow = makeDataTableFlow(10, 300).map([&](Row v)
+                                               {
+                                                   local_window_state.addRow(std::move(v));
+                                                   local_rows.push_back(v);
+                                                   return local_window_state;
+                                               });
+
+    flow.subscribe(
+        [](DataWindows windows)
+        {
+            std::cout << " event trigger: " << std::endl; 
+            windows.print(); 
+            std::cout << " event trigger completed!" << std::endl;
+        },
+        []()
+        { std::cout << "window with event time completed!" << std::endl << std::endl; });
+    printf("//! [window with event time ]\n\n");
+}
+
 void wait()
 {
     do
     {
-        std::cout << '\n' << "Press a key to continue..." ;
+        std::cout << '\n' << "Press enter to continue..." ;
     } while (std::cin.get() != '\n');
 }
 
@@ -149,12 +173,13 @@ int main(int, char **)
 
     std::map<std::string, FnPtr> functionMap;
 
-    functionMap["0_demo_create"] = demo_create;
-    functionMap["1_demo_filter"] = demo_filter;
-    functionMap["2_demo_groupby"] = demo_groupby;
-    functionMap["3_demo_max"] = demo_max;
-    functionMap["4_demo_concat"] = demo_concat;
-    functionMap["5_demo_window_sliding"] = demo_window_sliding;
+    //functionMap["0_demo_create"] = demo_create;
+    //functionMap["1_demo_filter"] = demo_filter;
+    //functionMap["2_demo_groupby"] = demo_groupby;
+    //functionMap["3_demo_max"] = demo_max;
+    //functionMap["4_demo_concat"] = demo_concat;
+    //functionMap["5_demo_window_sliding"] = demo_window_sliding;
+    functionMap["6_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
 
     demo(functionMap);
 
