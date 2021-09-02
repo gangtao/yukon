@@ -23,9 +23,9 @@ void demo_create()
 
 void demo_filter()
 {
-    printf("//! [filter flow : where usage > 80 ]\n");
+    printf("//! [filter flow : where usage > 60 ]\n");
     auto flow = makeDataTableFlow(10, 300).filter([](Row v)
-                                                  { return std::get<int>(v["usage"]) > 80; });
+                                                  { return std::get<int>(v["usage"]) > 60; });
 
     flow.subscribe(
         [](Row v)
@@ -86,9 +86,9 @@ void demo_groupby()
     printf("//! [group by ]\n\n");
 }
 
-void demo_concat()
+void demo_merge()
 {
-    printf("//! [concat ]\n");
+    printf("//! [merge two flows ]\n");
     auto flow1 = makeDataTableFlow(10, 300);
     auto flow2 = makeWaterMarkFlow(10, 300);
 
@@ -98,28 +98,15 @@ void demo_concat()
         [](Row v)
         { printRow(v); },
         []()
-        { std::cout << "concat flow completed!" << std::endl; });
-    printf("//! [concat ]\n\n");
-}
-
-void test_merge()
-{
-    auto o1 = rxcpp::observable<>::timer(std::chrono::milliseconds(15)).map([](int) {return 1;});
-    auto o2 = rxcpp::observable<>::timer(std::chrono::milliseconds(10)).map([](int) {return 2;});
-    auto o3 = rxcpp::observable<>::timer(std::chrono::milliseconds(5)).map([](int) {return 3;});
-    auto values = o1.merge(o2, o3);
-    values.
-        subscribe(
-            [](int v){printf("OnNext: %d\n", v);},
-            [](){printf("OnCompleted\n");});
-    printf("//! [merge sample]\n");
+        { std::cout << "merge flow completed!" << std::endl; });
+    printf("//! [merge two flows ]\n\n");
 }
 
 void demo_window_sliding()
 {
     printf("//! [window with processing time]\n");
     int counter = 0;
-    auto flow = makeDataTableFlow(10, 300).window_with_time(std::chrono::milliseconds(900), rxcpp::observe_on_new_thread());
+    auto flow = makeDataTableFlow(10, 300).window_with_time(std::chrono::milliseconds(900));
 
     flow.subscribe(
         [&counter](rxcpp::observable<Row> w)
@@ -150,14 +137,15 @@ void demo_eventtime_window_sliding()
     flow.subscribe(
         [](DataWindows windows)
         {
-            std::cout << " ############################################################# " << std::endl; 
-            std::cout << " event trigger: " << std::endl; 
-            windows.print(); 
+            std::cout << " ############################################################# " << std::endl;
+            std::cout << " event trigger: " << std::endl;
+            windows.print();
             std::cout << " event trigger completed!" << std::endl;
-            std::cout << " ############################################################# " << std::endl; 
+            std::cout << " ############################################################# " << std::endl;
         },
         []()
-        { std::cout << "window with event time completed!" << std::endl << std::endl; });
+        { std::cout << "window with event time completed!" << std::endl
+                    << std::endl; });
     printf("//! [window with event time ]\n\n");
 }
 
@@ -169,21 +157,22 @@ void demo_eventtime_window_sliding_with_fix_watermark()
                                                {
                                                    auto state = local_window_state.addRow(std::move(row));
                                                    return state;
-                                               }).filter([](DataWindowsWithFixWatermark windows){
-                                                   return windows.has_trigger();
-                                               });
+                                               })
+                    .filter([](DataWindowsWithFixWatermark windows)
+                            { return windows.has_trigger(); });
 
     flow.subscribe(
         [](DataWindowsWithFixWatermark windows)
         {
-            std::cout << " ############################################################# " << std::endl; 
-            std::cout << " event trigger: " << std::endl; 
-            windows.print(); 
+            std::cout << " ############################################################# " << std::endl;
+            std::cout << " event trigger: " << std::endl;
+            windows.print();
             std::cout << " event trigger completed!" << std::endl;
-            std::cout << " ############################################################# " << std::endl; 
+            std::cout << " ############################################################# " << std::endl;
         },
         []()
-        { std::cout << "window with event time completed!" << std::endl << std::endl; });
+        { std::cout << "window with event time completed!" << std::endl
+                    << std::endl; });
     printf("//! [window with event time and fix watermark ]\n\n");
 }
 
@@ -191,7 +180,8 @@ void wait()
 {
     do
     {
-        std::cout << '\n' << "Press enter to continue..." ;
+        std::cout << '\n'
+                  << "Press enter to continue...";
     } while (std::cin.get() != '\n');
 }
 
@@ -216,10 +206,10 @@ int main(int, char **)
     //functionMap["1_demo_filter"] = demo_filter;
     //functionMap["2_demo_groupby"] = demo_groupby;
     //functionMap["3_demo_max"] = demo_max;
-    functionMap["4_demo_concat"] = test_merge;
+    //functionMap["4_demo_merge"] = demo_merge;
     //functionMap["5_demo_window_sliding"] = demo_window_sliding;
     //functionMap["6_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
-    //functionMap["7_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
+    functionMap["7_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
 
     demo(functionMap);
 

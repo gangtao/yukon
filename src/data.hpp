@@ -15,6 +15,7 @@ typedef std::variant<int, float, long, std::string> Value;
 typedef std::map<Key, Value> Row;
 typedef std::vector<Row> Rows;
 
+
 long getCurrentTimestamp()
 {
     auto t = std::chrono::system_clock::now();
@@ -69,54 +70,42 @@ void printRow(const std::map<Key, Value> &row)
     std::cout << std::endl;
 }
 
-auto makeDataTableFlow(int size, int interval = 1000)
+auto makeDataTableFlow(int size = 10, int interval = 300)
 {
-    auto flow = rxcpp::observable<>::create<Row>(
-        [=](rxcpp::subscriber<Row> s)
-        {
-            auto generator = cxxfaker::providers::Internet();
-            generator.Seed(123);
+    auto period = std::chrono::milliseconds(interval);
+    auto values = rxcpp::observable<>::interval(period);
 
-            int currentSize = 0;
-            while (size == -1 || currentSize < size)
-            {
-                long ts = getCurrentTimestamp();
-                auto tags = std::vector<std::string>({"A", "B", "C"});
-                auto it = generator.randomElement(tags);
-                Row row{
-                    {"timestamp", ts},
-                    {"usage", generator.randomInt(0, 100)},
-                    {"host", generator.IPv4()},
-                    {"tag", *it++}};
-                s.on_next(row);
-                std::this_thread::sleep_for(std::chrono::milliseconds(interval));
-                currentSize++;
-            }
-            s.on_completed();
-        });
+    auto flow = values.take(size).map([=](int v){
+        // TODO : need a glable generator here
+        auto generator = cxxfaker::providers::Internet();
+        generator.Seed(rand());
+        long ts = getCurrentTimestamp();
+        auto tags = std::vector<std::string>({"A", "B", "C"});
+        auto it = generator.randomElement(tags);
+        Row row{
+            {"timestamp", ts},
+            {"usage", generator.randomInt(0, 100)},
+            {"host", generator.IPv4()},
+            {"tag", *it++}};
+        return row;
+    });
 
     return flow;
 }
 
-auto makeWaterMarkFlow(int size, int interval = 1000)
+auto makeWaterMarkFlow(int size = 10, int interval = 300)
 {
-    auto flow = rxcpp::observable<>::create<Row>(
-        [=](rxcpp::subscriber<Row> s)
-        {
-            int currentSize = 0;
-            while (size == -1 || currentSize < size)
-            {
-                long ts = getCurrentTimestamp();
-                Row row{
-                    {"timestamp", ts},
-                    {"watermark", 0},
-                };
-                s.on_next(row);
-                std::this_thread::sleep_for(std::chrono::milliseconds(interval));
-                currentSize++;
-            }
-            s.on_completed();
-        });
+    auto period = std::chrono::milliseconds(interval);
+    auto values = rxcpp::observable<>::interval(period);
+
+    auto flow = values.take(size).map([](int v){
+        long ts = getCurrentTimestamp();
+        Row row{
+            {"timestamp", ts},
+            {"watermark", 0},
+        };
+        return row;
+    });
 
     return flow;
 }
