@@ -152,7 +152,7 @@ void demo_eventtime_window_sliding()
 void demo_eventtime_window_sliding_with_fix_watermark()
 {
     printf("//! [window with event time and fix watermark]\n");
-    DataWindowsWithFixWatermark local_window_state(1000, 100);
+    DataWindowsWithFixWatermark local_window_state(1000, 200);
     auto flow = makeDataTableFlow(10, 300).map([&](Row row)
                                                {
                                                    auto state = local_window_state.addRow(std::move(row));
@@ -176,13 +176,41 @@ void demo_eventtime_window_sliding_with_fix_watermark()
     printf("//! [window with event time and fix watermark ]\n\n");
 }
 
+void demo_eventtime_window_sliding_with_fix_low_watermark()
+{
+    printf("//! [window with event time and fix low watermark]\n");
+    DataWindowsWithFixWatermark local_window_state(1000, 200);
+
+    auto flow = makeDataTableFlow(10, 300, 100l, 300l).map([&](Row row)
+                                               {
+                                                   auto state = local_window_state.addRow(std::move(row));
+                                                   return state;
+                                               })
+                    .filter([](DataWindowsWithFixWatermark windows)
+                            { return windows.has_trigger(); });
+
+    flow.subscribe(
+        [](DataWindowsWithFixWatermark windows)
+        {
+            std::cout << " ############################################################# " << std::endl;
+            std::cout << " event trigger: " << std::endl;
+            windows.print();
+            std::cout << " event trigger completed!" << std::endl;
+            std::cout << " ############################################################# " << std::endl;
+        },
+        []()
+        { std::cout << "window with event time completed!" << std::endl
+                    << std::endl; });
+    printf("//! [window with event time and fix low watermark ]\n\n");
+}
+
 void demo_eventtime_window_sliding_with_dynamic_watermark()
 {
     printf("//! [window with event time and fix watermark]\n");
     DataWindowsWithDynamicWatermark local_window_state(1000);
 
-    auto dataflow = makeDataTableFlow(10, 300);
-    auto watermarkflow = makeWaterMarkFlow(20, 300, 100);
+    auto dataflow = makeDataTableFlow(10, 300, 300l, 500l);
+    auto watermarkflow = makeWaterMarkFlow(20, 300, 0l);
 
     auto flow = dataflow.merge(watermarkflow).map([&](Row row)
                                                {
@@ -240,8 +268,11 @@ int main(int, char **)
     functionMap["4_demo_window_sliding"] = demo_window_sliding;
     functionMap["5_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
     functionMap["6_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
-    functionMap["7_demo_merge"] = demo_merge;
-    functionMap["8_demo_eventtime_window_sliding_with_dynamic_watermark"] = demo_eventtime_window_sliding_with_dynamic_watermark;
+    functionMap["7_demo_eventtime_window_sliding_with_fix_low_watermark"] = demo_eventtime_window_sliding_with_fix_low_watermark;
+
+    functionMap["8_demo_merge"] = demo_merge;
+    functionMap["9_demo_eventtime_window_sliding_with_dynamic_watermark"] = demo_eventtime_window_sliding_with_dynamic_watermark;
+    
     
     demo(functionMap);
 

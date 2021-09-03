@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <random>
 
 #include "rxcpp/rx.hpp"
 #include "cxxfaker/include/Internet.h"
@@ -14,6 +15,14 @@ typedef std::string Key;
 typedef std::variant<int, float, long, std::string> Value;
 typedef std::map<Key, Value> Row;
 typedef std::vector<Row> Rows;
+
+std::default_random_engine generator;
+
+long randomDelay(long a, long b)
+{
+    std::uniform_int_distribution<long> distribution(a, b);
+    return distribution(generator);
+}
 
 long getCurrentTimestamp()
 {
@@ -69,7 +78,7 @@ void printRow(const std::map<Key, Value> &row)
     std::cout << std::endl;
 }
 
-auto makeDataTableFlow(int size = 10, int interval = 300)
+auto makeDataTableFlow(int size = 10, int interval = 300, long latency_min = 100l, long latency_max = 200l)
 {
     auto period = std::chrono::milliseconds(interval);
     auto values = rxcpp::observable<>::interval(period);
@@ -80,10 +89,13 @@ auto makeDataTableFlow(int size = 10, int interval = 300)
                                           auto generator = cxxfaker::providers::Internet();
                                           generator.Seed(rand());
                                           long ts = getCurrentTimestamp();
+
+                                          // simulate delay
+                                          long delay = randomDelay(latency_min, latency_max);
                                           auto tags = std::vector<std::string>({"A", "B", "C"});
                                           auto it = generator.randomElement(tags);
                                           Row row{
-                                              {"timestamp", ts},
+                                              {"timestamp", ts - delay},
                                               {"usage", generator.randomInt(0, 100)},
                                               {"host", generator.IPv4()},
                                               {"tag", *it++}};
@@ -256,9 +268,20 @@ public:
 
     const DataWindowsWithFixWatermark &addRow(Row &&row)
     {
-        DataWindows::addRow(std::move(row));
-        long ts = getCurrentTimestamp();
         windows_to_trigger.clear();
+
+        long timestamp = std::get<long>(row.at("timestamp"));
+        long ts = getCurrentTimestamp();
+
+        // check if the event is a late arrive event
+        // only accept event within watermark
+        if (ts - timestamp > watermark)
+        {
+            std::cout << "discard late arrive event : " << timestamp << " current time : " << ts << std::endl;
+            return *this;
+        }
+
+        DataWindows::addRow(std::move(row));
 
         for (auto const &[key, val] : windows)
         {
@@ -301,6 +324,9 @@ class DataWindowsWithDynamicWatermark : public DataWindows
 {
 private:
     std::map<long, DataWindow> windows_to_trigger;
+    long high_watermark = 0l;
+    long max_latency = 0l;
+    long contorl_buffer = 0l;
 
 public:
     DataWindowsWithDynamicWatermark(const long length)
@@ -311,21 +337,41 @@ public:
     const DataWindowsWithDynamicWatermark &addRow(Row &&row)
     {
         windows_to_trigger.clear();
+        long timestamp = std::get<long>(row.at("timestamp"));
+        long ts = getCurrentTimestamp();
 
         if (row.find("watermark") == row.end())
         {
+            // discard late arrive event
+            if (timestamp < high_watermark)
+            {
+                std::cout << "discard late arrive event : " << timestamp << " current time : " << ts << std::endl;
+                return *this;
+            }
+
             // data row
             DataWindows::addRow(std::move(row));
+
+            long latency = ts - timestamp;
+
+            if (latency > max_latency)
+            {
+                max_latency = latency;
+            }
+
+            // update watermark
+            high_watermark = timestamp - max_latency - contorl_buffer;
         }
         else
         {
-            // watermark
-            long ts = getCurrentTimestamp();
-            long watermark = std::get<long>(row.at("watermark"));
+            // trigger based on dynamic watermark
+            long buffer = std::get<long>(row.at("watermark"));
+            contorl_buffer = buffer;
+
             for (auto const &[key, val] : windows)
             {
                 auto end = val.getEnd();
-                if (ts - end > watermark)
+                if (ts - end > max_latency + buffer)
                 {
                     std::cout << "trigger window with end time : " << end << std::endl;
                     windows_to_trigger.insert({key, val});
