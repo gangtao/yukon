@@ -210,7 +210,7 @@ void demo_eventtime_window_sliding_with_dynamic_watermark()
     DataWindowsWithDynamicWatermark local_window_state(1000);
 
     auto dataflow = makeDataTableFlow(10, 300, 300l, 500l);
-    auto watermarkflow = makeWaterMarkFlow(20, 300, 0l);
+    auto watermarkflow = makeWaterMarkFlow(40, 100, 0l);
 
     auto flow = dataflow.merge(watermarkflow).map([&](Row row)
                                                {

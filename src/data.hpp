@@ -70,12 +70,16 @@ const std::string getValueString(const Value &value)
 
 void printRow(const std::map<Key, Value> &row)
 {
+    long timestamp = std::get<long>(row.at("timestamp"));
+    long ts = getCurrentTimestamp();
+    long latency = ts - timestamp;
+
     std::cout << "| ";
     for (auto const &[key, val] : row)
     {
         std::cout << key << " : " << getValueString(val) << " | ";
     }
-    std::cout << std::endl;
+    std::cout << " latency : " << latency << " | " << std::endl;
 }
 
 auto makeDataTableFlow(int size = 10, int interval = 300, long latency_min = 100l, long latency_max = 200l)
@@ -360,7 +364,7 @@ public:
             }
 
             // update watermark
-            high_watermark = timestamp - max_latency - contorl_buffer;
+            high_watermark = timestamp - contorl_buffer;
         }
         else
         {
@@ -396,6 +400,7 @@ public:
 
     virtual void print() const
     {
+
         for (auto const &[key, val] : windows_to_trigger)
         {
             std::cout << "key : " << key << std::endl;
