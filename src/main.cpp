@@ -233,13 +233,13 @@ int main(int, char **)
 
     std::map<std::string, FnPtr> functionMap;
 
-    //functionMap["0_demo_create"] = demo_create;
-    //functionMap["1_demo_filter"] = demo_filter;
-    //functionMap["2_demo_groupby"] = demo_groupby;
-    //functionMap["3_demo_max"] = demo_max;
-    //functionMap["4_demo_window_sliding"] = demo_window_sliding;
-    //functionMap["5_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
-    //functionMap["6_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
+    functionMap["0_demo_create"] = demo_create;
+    functionMap["1_demo_filter"] = demo_filter;
+    functionMap["2_demo_groupby"] = demo_groupby;
+    functionMap["3_demo_max"] = demo_max;
+    functionMap["4_demo_window_sliding"] = demo_window_sliding;
+    functionMap["5_demo_eventtime_window_sliding"] = demo_eventtime_window_sliding;
+    functionMap["6_demo_eventtime_window_sliding_with_fix_watermark"] = demo_eventtime_window_sliding_with_fix_watermark;
     functionMap["7_demo_merge"] = demo_merge;
     functionMap["8_demo_eventtime_window_sliding_with_dynamic_watermark"] = demo_eventtime_window_sliding_with_dynamic_watermark;
     
